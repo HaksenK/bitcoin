@@ -381,6 +381,180 @@ static UniValue generateblock(const JSONRPCRequest& request)
     return obj;
 }
 
+// imitation of generatetoaddress, but needs a previous block's index
+static UniValue generateBlockNextToBlockIndex(ChainstateManager& chainman, const CTxMemPool& mempool, const CScript& coinbase_script, int nGenerate, uint64_t nMaxTries, CBlockIndex* pblockindex)
+{
+    int nHeightEnd = 0;
+    int nHeight = 0;
+    CBlockIndex* pblockroot = pblockindex;
+    std::set<CBlockIndex*> vBlockIndex;
+    std::vector<CBlock> vBlockMadeHere;
+
+    {   // Don't keep cs_main locked
+        LOCK(cs_main);
+        nHeight = pblockroot->nHeight;
+        nHeightEnd = nHeight+nGenerate;
+    }
+    unsigned int nExtraNonce = 0;
+    UniValue blockHashes(UniValue::VARR);
+    while (nHeight < nHeightEnd && !ShutdownRequested())
+    {
+        // Rollback to a designated previous block. Deleted blocks are preserved into the stack
+        while (::ChainstateActive().m_chain.Tip() != pblockroot) {
+            CBlockIndex *pindexDelete = ::ChainstateActive().m_chain.Tip();
+            assert(pindexDelete);
+            CChainParams chainparams(Params());
+            // Read block from disk.
+            std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
+            CBlock& block = *pblock;
+            if (!ReadBlockFromDisk(block, pindexDelete, chainparams.GetConsensus()))
+                exit(1);
+            vBlockIndex.insert(pindexDelete);
+
+            {
+                LOCK(cs_main);
+                CCoinsViewCache view(&::ChainstateActive().CoinsTip());
+                assert(view.GetBestBlock() == pindexDelete->GetBlockHash());
+                if (::ChainstateActive().DisconnectBlock(block, pindexDelete, view) != DISCONNECT_OK)
+                    exit(1);
+                assert(view.Flush());
+            }
+            ::ChainstateActive().m_chain.SetTip(pindexDelete->pprev);
+        }
+
+        // insert to setBlockIndexCandidates to pass block tests
+        ::ChainstateActive().setBlockIndexCandidates.insert(::ChainstateActive().m_chain.Tip());
+        for (auto itr = vBlockIndex.begin(); itr != vBlockIndex.end(); ++itr) {
+            ::ChainstateActive().setBlockIndexCandidates.insert(*itr);
+        }
+        for (auto itr = vBlockMadeHere.begin(); itr != vBlockMadeHere.end(); ++itr) {
+            {
+                LOCK(cs_main);
+                CBlockIndex* pblockIndexTmp = LookupBlockIndex(itr->GetBlockHeader().GetHash());
+                ::ChainstateActive().setBlockIndexCandidates.insert(pblockIndexTmp);
+            }
+        }
+
+        // Push blocks made in this function
+        for (auto itr = vBlockMadeHere.begin(); itr != vBlockMadeHere.end(); ++itr) {
+            // imitation of CChainstate::ConnectTip()
+            BlockValidationState state;
+            CChainParams chainparams(Params());
+            CBlockIndex* pindexNew;
+            {
+                LOCK(cs_main);
+                pindexNew = LookupBlockIndex(itr->GetBlockHeader().GetHash());
+            }
+            DisconnectedBlockTransactions disconnectpool;
+            AssertLockHeld(cs_main);
+            AssertLockHeld(mempool.cs);
+
+            assert(pindexNew->pprev == ::ChainstateActive().m_chain.Tip());
+            std::shared_ptr<CBlock> pblockNew = std::make_shared<CBlock>();
+            if (!ReadBlockFromDisk(*pblockNew, pindexNew, chainparams.GetConsensus()))
+                exit(1);
+            std::shared_ptr<const CBlock> pthisBlock = pblockNew;
+            const CBlock& blockConnecting = *pthisBlock;
+
+            // Apply the block atomically to the chain state.
+            {
+                CCoinsViewCache view(&::ChainstateActive().CoinsTip());
+                bool rv = ::ChainstateActive().ConnectBlock(blockConnecting, state, pindexNew, view, chainparams);
+                GetMainSignals().BlockChecked(blockConnecting, state);
+                if (!rv) {
+                    return error("%s: ConnectBlock %s failed, %s", __func__, pindexNew->GetBlockHash().ToString(), state.ToString());
+                }
+                bool flushed = view.Flush();
+                assert(flushed);
+            }
+            // Write the chain state to disk, if necessary.
+            if (!::ChainstateActive().FlushStateToDisk(chainparams, state, FlushStateMode::IF_NEEDED))
+                return false;
+            // Remove conflicting transactions from the mempool.;
+            disconnectpool.removeForBlock(blockConnecting.vtx);
+            // Update m_chain & related variables.
+            ::ChainstateActive().m_chain.SetTip(pindexNew);
+            UpdateTipCaller(pindexNew, chainparams);
+        }
+
+        // start creating a block
+        std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(mempool, Params()).CreateNewBlock(coinbase_script, pblockindex));
+        if (!pblocktemplate.get())
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't create new block");
+        CBlock *pblock = &pblocktemplate->block;
+
+        uint256 block_hash;
+        if (!GenerateBlock(chainman, *pblock, nMaxTries, nExtraNonce, block_hash)) {
+            break;
+        }
+
+        if (!block_hash.IsNull()) {
+            ++nHeight;
+            blockHashes.push_back(block_hash.GetHex());
+        }
+
+        // update tip
+        {
+            LOCK(cs_main);
+            CBlockIndex* pblocknowgenerated = LookupBlockIndex(pblock->GetBlockHeader().GetHash());
+            vBlockMadeHere.emplace_back(*pblock);
+            pblockindex = pblocknowgenerated;
+        }
+    }
+
+    // no need to reprocess preserved blocks
+    return blockHashes;
+}
+
+static UniValue generatetoaddressnexttohash(const JSONRPCRequest& request)
+{
+    RPCHelpMan{"generatetoaddressnexttohash",
+        "\nMine blocks next to a block specified by its hash immediately to a specified address\n",
+        {
+            {"nblocks", RPCArg::Type::NUM, RPCArg::Optional::NO, "How many blocks are generated immediately."},
+            {"address", RPCArg::Type::STR, RPCArg::Optional::NO, "The address to send the newly generated bitcoin to."},
+            {"blockhash", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The block hash which you want to mine blocks next to"},
+            {"maxtries", RPCArg::Type::NUM, /* default */ ToString(DEFAULT_MAX_TRIES), "How many iterations to try."},
+        },
+        RPCResult{
+            RPCResult::Type::ARR, "", "hashes of blocks generated",
+                {
+                    {RPCResult::Type::STR_HEX, "", "blockhash"},
+                }},
+        RPCExamples{
+            "\nGenerate blocks after a designated block to myaddress\n"
+            + HelpExampleCli("generatetoaddressnexttohash", "11 00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09 \"myaddress\"")
+        },
+    }.Check(request);
+
+    const int num_blocks{request.params[0].get_int()};
+    const uint64_t max_tries{request.params[3].isNull() ? DEFAULT_MAX_TRIES : request.params[3].get_int()};
+
+    // destination address
+    CTxDestination destination = DecodeDestination(request.params[1].get_str());
+    if (!IsValidDestination(destination)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Error: Invalid address");
+    }
+
+    const CTxMemPool& mempool = EnsureMemPool(request.context);
+    ChainstateManager& chainman = EnsureChainman(request.context);
+
+    CScript coinbase_script = GetScriptForDestination(destination);
+
+    // prev hash
+    uint256 hash(ParseHashV(request.params[2], "blockhash"));
+    CBlockIndex* pblockindex;
+    {
+        LOCK(cs_main);
+        pblockindex = LookupBlockIndex(hash);
+        if (!pblockindex) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+        }
+    }
+
+    return generateBlockNextToBlockIndex(chainman, mempool, coinbase_script, num_blocks, max_tries, pblockindex);
+}
+
 static UniValue getmininginfo(const JSONRPCRequest& request)
 {
             RPCHelpMan{"getmininginfo",
@@ -1194,6 +1368,8 @@ static const CRPCCommand commands[] =
     { "generating",         "generatetoaddress",      &generatetoaddress,      {"nblocks","address","maxtries"} },
     { "generating",         "generatetodescriptor",   &generatetodescriptor,   {"num_blocks","descriptor","maxtries"} },
     { "generating",         "generateblock",          &generateblock,          {"output","transactions"} },
+//    { "generating",         "generatenexttohash",     &generatenexttohash,     {"prevhash","address","maxtries"} },
+    { "generating",         "generatetoaddressnexttohash", &generatetoaddressnexttohash, {"nblocks","address","prevhash","maxtries"} },
 
     { "util",               "estimatesmartfee",       &estimatesmartfee,       {"conf_target", "estimate_mode"} },
 

@@ -174,6 +174,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "createwallet", 5, "descriptors"},
     { "getnodeaddresses", 0, "count"},
     { "stop", 0, "wait" },
+//    { "generatenexttohash", 2, "maxtries" },
+    { "generatetoaddressnexttohash", 0, "nblocks" },
+    { "generatetoaddressnexttohash", 3, "maxtries" },
 };
 // clang-format on
 

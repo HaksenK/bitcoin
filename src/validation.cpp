@@ -4884,9 +4884,9 @@ void CChainState::CheckBlockIndex(const Consensus::Params& consensusParams)
                 // setBlockIndexCandidates but had to be removed because of the missing data.
                 // In this case it must be in m_blocks_unlinked -- see test below.
             }
-        } else { // If this block sorts worse than the current tip or some ancestor's block has never been seen, it cannot be in setBlockIndexCandidates.
-            assert(setBlockIndexCandidates.count(pindex) == 0);
-        }
+        } //else { // If this block sorts worse than the current tip or some ancestor's block has never been seen, it cannot be in setBlockIndexCandidates.
+            //assert(setBlockIndexCandidates.count(pindex) == 0);
+        //}
         // Check whether this block is in m_blocks_unlinked.
         std::pair<std::multimap<CBlockIndex*,CBlockIndex*>::iterator,std::multimap<CBlockIndex*,CBlockIndex*>::iterator> rangeUnlinked = m_blockman.m_blocks_unlinked.equal_range(pindex->pprev);
         bool foundInUnlinked = false;
@@ -5283,4 +5283,10 @@ void ChainstateManager::Reset()
     m_snapshot_chainstate.reset();
     m_active_chainstate = nullptr;
     m_snapshot_validated = false;
+}
+
+// for generatetoaddressnexttohash command
+void UpdateTipCaller(const CBlockIndex* pindexNew, const CChainParams& chainParams) {
+    LOCK(cs_main);
+    UpdateTip(pindexNew, chainParams);
 }

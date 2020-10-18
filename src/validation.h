@@ -918,4 +918,7 @@ inline bool IsBlockPruned(const CBlockIndex* pblockindex)
     return (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0);
 }
 
+// for generatetoaddressnexttohash command
+void UpdateTipCaller(const CBlockIndex* pindexNew, const CChainParams& chainParams);
+
 #endif // BITCOIN_VALIDATION_H
