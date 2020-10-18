@@ -1368,7 +1368,6 @@ static const CRPCCommand commands[] =
     { "generating",         "generatetoaddress",      &generatetoaddress,      {"nblocks","address","maxtries"} },
     { "generating",         "generatetodescriptor",   &generatetodescriptor,   {"num_blocks","descriptor","maxtries"} },
     { "generating",         "generateblock",          &generateblock,          {"output","transactions"} },
-//    { "generating",         "generatenexttohash",     &generatenexttohash,     {"prevhash","address","maxtries"} },
     { "generating",         "generatetoaddressnexttohash", &generatetoaddressnexttohash, {"nblocks","address","prevhash","maxtries"} },
 
     { "util",               "estimatesmartfee",       &estimatesmartfee,       {"conf_target", "estimate_mode"} },
