@@ -45,6 +45,8 @@ public:
     friend inline bool operator==(const base_blob& a, const base_blob& b) { return a.Compare(b) == 0; }
     friend inline bool operator!=(const base_blob& a, const base_blob& b) { return a.Compare(b) != 0; }
     friend inline bool operator<(const base_blob& a, const base_blob& b) { return a.Compare(b) < 0; }
+    // added for oracle
+    const uint8_t & operator[](int i) { return data[i]; }
 
     std::string GetHex() const;
     void SetHex(const char* psz);
@@ -121,6 +123,23 @@ class uint256 : public base_blob<256> {
 public:
     uint256() {}
     explicit uint256(const std::vector<unsigned char>& vch) : base_blob<256>(vch) {}
+    // added for oracle
+    uint256 & operator=(const uint256& b) {
+        std::copy(std::begin(b.data), std::end(b.data), std::begin(data));
+        return *this;
+    }
+    uint256 operator^(const uint256& b) {
+        uint256 retval;
+        retval = *this;
+        for (int i = 0; i < WIDTH; ++i)
+            retval.data[i] ^= b.data[i];
+        return retval;
+    }
+    uint256 & operator^=(const uint256& b) {
+        for (int i = 0; i < WIDTH; ++i)
+            data[i] ^= b.data[i];
+        return *this;
+    }
 };
 
 /* uint256 from const char *.
