@@ -8,16 +8,23 @@
 #include <hash.h>
 #include <tinyformat.h>
 
-uint256 CBlockHeader::GetHash() const
+uint256 CBlockHeader::GetHash(bool oracle_is_activated) const
 {
-    return SerializeHash(*this);
+    if(oracle_is_activated) {
+        CBlockHeader header = HeaderWithoutOracle();
+        return SerializeHash(header);
+    } else {
+        return SerializeHash(*this);
+    }
 }
 
 std::string CBlock::ToString() const
 {
     std::stringstream s;
-    s << strprintf("CBlock(hash=%s, ver=0x%08x, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%u)\n",
+    s << strprintf("CBlock(hash=%s, oracle=%s, hashWithOracle=%s, ver=0x%08x, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%u)\n",
         GetHash().ToString(),
+        oracle.ToString(),
+        GetHash(true).ToString(),
         nVersion,
         hashPrevBlock.ToString(),
         hashMerkleRoot.ToString(),

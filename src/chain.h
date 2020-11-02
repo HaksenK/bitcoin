@@ -139,6 +139,7 @@ class CBlockIndex
 public:
     //! pointer to the hash of the block, if any. Memory is owned by this CBlockIndex
     const uint256* phashBlock{nullptr};
+    const uint256* phashBlockWithOracle{nullptr};
 
     //! pointer to the index of the predecessor of this block
     CBlockIndex* pprev{nullptr};
@@ -179,6 +180,9 @@ public:
     uint32_t nTime{0};
     uint32_t nBits{0};
     uint32_t nNonce{0};
+    //! added for oracle
+    bool has_oracle{false};
+    uint256 oracle{};
 
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     int32_t nSequenceId{0};
@@ -195,7 +199,10 @@ public:
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
-          nNonce{block.nNonce}
+          nNonce{block.nNonce},
+          // added for oracle
+          has_oracle{block.has_oracle},
+          oracle{block.oracle}
     {
     }
 
@@ -227,12 +234,19 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        // added for oracle
+        block.has_oracle     = has_oracle;
+        block.oracle         = oracle;
         return block;
     }
 
-    uint256 GetBlockHash() const
+    uint256 GetBlockHash(bool oracle_is_activated = false) const
     {
-        return *phashBlock;
+        // added for oracle
+        if(oracle_is_activated)
+            return *phashBlockWithOracle;
+        else
+            return *phashBlock;
     }
 
     /**
@@ -272,10 +286,22 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
-            pprev, nHeight,
-            hashMerkleRoot.ToString(),
-            GetBlockHash().ToString());
+        // added for oracle
+        if (has_oracle) {
+            return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s, oracle=%s, hashBlockWithOracle=%s)",
+                pprev, nHeight,
+                hashMerkleRoot.ToString(),
+                GetBlockHash().ToString(),
+                oracle.ToString(),
+                GetBlockHash(true).ToString()
+            );
+        } else {
+            return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
+                pprev, nHeight,
+                hashMerkleRoot.ToString(),
+                GetBlockHash().ToString()
+            );
+        }
     }
 
     //! Check whether this block index entry is valid up to the passed validity level.
@@ -349,6 +375,9 @@ public:
         READWRITE(obj.nTime);
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
+        // added for oracle
+        READWRITE(obj.has_oracle);
+        READWRITE(obj.oracle);
     }
 
     uint256 GetBlockHash() const
@@ -360,6 +389,9 @@ public:
         block.nTime           = nTime;
         block.nBits           = nBits;
         block.nNonce          = nNonce;
+        // added for oracle
+        block.has_oracle      = has_oracle;
+        block.oracle          = oracle;
         return block.GetHash();
     }
 

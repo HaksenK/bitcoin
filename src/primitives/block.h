@@ -27,13 +27,21 @@ public:
     uint32_t nTime;
     uint32_t nBits;
     uint32_t nNonce;
+    // added for oracle
+    bool has_oracle;
+    uint256 oracle;
 
     CBlockHeader()
     {
         SetNull();
     }
 
-    SERIALIZE_METHODS(CBlockHeader, obj) { READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce); }
+    SERIALIZE_METHODS(CBlockHeader, obj) {
+        if(obj.has_oracle)
+            READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce, obj.oracle);
+        else
+            READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce);
+    }
 
     void SetNull()
     {
@@ -43,6 +51,9 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+        // added for oracle
+        has_oracle = false;
+        oracle.SetNull();
     }
 
     bool IsNull() const
@@ -50,7 +61,30 @@ public:
         return (nBits == 0);
     }
 
-    uint256 GetHash() const;
+    //added for oracle
+    CBlockHeader HeaderWithoutOracle() const {
+        CBlockHeader block;
+        block.SetNull();
+        block.nVersion       = nVersion;
+        block.hashPrevBlock  = hashPrevBlock;
+        block.hashMerkleRoot = hashMerkleRoot;
+        block.nTime          = nTime;
+        block.nBits          = nBits;
+        block.nNonce         = nNonce;
+        return block;
+    }
+
+    void AddOracle(uint256 hash) {
+        oracle ^= hash;
+        has_oracle = true;
+    }
+
+    void ResetOracle() {
+        oracle ^= oracle;
+        has_oracle = false;
+    }
+
+    uint256 GetHash(bool oracle_is_activated = false) const;
 
     int64_t GetBlockTime() const
     {
@@ -101,6 +135,9 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        // added for oracle
+        block.has_oracle     = has_oracle;
+        block.oracle         = oracle;
         return block;
     }
 
