@@ -3180,6 +3180,16 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
     pindexNew->nSequenceId = 0;
     BlockMap::iterator mi = m_block_index.insert(std::make_pair(hash, pindexNew)).first;
     pindexNew->phashBlock = &((*mi).first);
+    // added for oracle
+    if (pindexNew->has_oracle) {
+        uint256 hashBlockWithOracle = block.GetHash(true);
+        pindexNew->phashBlockWithOracle = &hashBlockWithOracle;
+        m_block_index.insert(std::make_pair(hashBlockWithOracle, pindexNew));
+    } else {
+        uint256 dummyHashWithOracle;
+        dummyHashWithOracle.SetNull();
+        pindexNew->phashBlockWithOracle = &dummyHashWithOracle;
+    }
     BlockMap::iterator miPrev = m_block_index.find(block.hashPrevBlock);
     if (miPrev != m_block_index.end())
     {
