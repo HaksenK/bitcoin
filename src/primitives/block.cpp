@@ -11,10 +11,10 @@
 uint256 CBlockHeader::GetHash(bool oracle_is_activated) const
 {
     if(oracle_is_activated) {
+        return SerializeHash(*this);
+    } else {
         CBlockHeader header = HeaderWithoutOracle();
         return SerializeHash(header);
-    } else {
-        return SerializeHash(*this);
     }
 }
 
