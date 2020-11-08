@@ -237,6 +237,7 @@ public:
         // added for oracle
         block.has_oracle     = has_oracle;
         block.oracle         = oracle;
+        block.is_readwrite_mode = false;
         return block;
     }
 
@@ -392,6 +393,7 @@ public:
         // added for oracle
         block.has_oracle      = has_oracle;
         block.oracle          = oracle;
+        block.is_readwrite_mode = false;
         return block.GetHash();
     }
 

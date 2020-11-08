@@ -1134,13 +1134,15 @@ bool GetTransaction(const uint256& hash, CTransactionRef& txOut, const Consensus
 
 static bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const CMessageHeader::MessageStartChars& messageStart)
 {
+    const CBlock writableBlock = block.BlockReadableWritable();
     // Open history file to append
     CAutoFile fileout(OpenBlockFile(pos), SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull())
         return error("WriteBlockToDisk: OpenBlockFile failed");
 
     // Write index header
-    unsigned int nSize = GetSerializeSize(block, fileout.GetVersion());
+//    unsigned int nSize = GetSerializeSize(block, fileout.GetVersion());
+    unsigned int nSize = GetSerializeSize(writableBlock, fileout.GetVersion());
     fileout << messageStart << nSize;
 
     // Write block
@@ -1148,7 +1150,8 @@ static bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const CMessa
     if (fileOutPos < 0)
         return error("WriteBlockToDisk: ftell failed");
     pos.nPos = (unsigned int)fileOutPos;
-    fileout << block;
+//    fileout << block;
+    fileout << writableBlock;
 
     return true;
 }
@@ -1156,6 +1159,7 @@ static bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const CMessa
 bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::Params& consensusParams)
 {
     block.SetNull();
+    block.is_readwrite_mode = true;
 
     // Open history file to read
     CAutoFile filein(OpenBlockFile(pos, true), SER_DISK, CLIENT_VERSION);
@@ -1169,6 +1173,7 @@ bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::P
     catch (const std::exception& e) {
         return error("%s: Deserialize or I/O error - %s at %s", __func__, e.what(), pos.ToString());
     }
+    block.is_readwrite_mode = false;
 
     // Check the header
     if (!CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
@@ -4720,7 +4725,9 @@ void LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, FlatFi
                 blkdat.SetPos(nBlockPos);
                 std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
                 CBlock& block = *pblock;
+                block.is_readwrite_mode = true;
                 blkdat >> block;
+                block.is_readwrite_mode = false;
                 nRewind = blkdat.GetPos();
 
                 uint256 hash = block.GetHash();

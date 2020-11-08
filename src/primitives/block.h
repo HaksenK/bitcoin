@@ -30,6 +30,8 @@ public:
     // added for oracle
     bool has_oracle;
     uint256 oracle;
+    // added to write to or read from disk
+    bool is_readwrite_mode;
 
     CBlockHeader()
     {
@@ -37,7 +39,8 @@ public:
     }
 
     SERIALIZE_METHODS(CBlockHeader, obj) {
-        if(obj.has_oracle)
+        // Commit 5ec19df687c2a429dd8872d640ce88fdc06ded9b creates blocks whose nVersion is 0x30000000 (805306368)
+        if (obj.has_oracle && !obj.is_readwrite_mode && obj.nVersion > 0x30000000)
             READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce, obj.oracle);
         else
             READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce);
@@ -54,6 +57,7 @@ public:
         // added for oracle
         has_oracle = false;
         oracle.SetNull();
+        is_readwrite_mode = false;
     }
 
     bool IsNull() const
@@ -71,6 +75,7 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.is_readwrite_mode = is_readwrite_mode;
         return block;
     }
 
@@ -117,6 +122,9 @@ public:
     {
         READWRITEAS(CBlockHeader, obj);
         READWRITE(obj.vtx);
+        // Commit 5ec19df687c2a429dd8872d640ce88fdc06ded9b creates blocks whose nVersion is 0x30000000 (805306368)
+        if(obj.is_readwrite_mode && obj.nVersion > 0x30000000)
+            READWRITE(obj.has_oracle, obj.oracle, obj.is_readwrite_mode);
     }
 
     void SetNull()
@@ -138,6 +146,25 @@ public:
         // added for oracle
         block.has_oracle     = has_oracle;
         block.oracle         = oracle;
+        return block;
+    }
+
+    // added to write to or read from disk
+    CBlock BlockReadableWritable() const
+    {
+        CBlock block;
+        block.nVersion       = nVersion;
+        block.hashPrevBlock  = hashPrevBlock;
+        block.hashMerkleRoot = hashMerkleRoot;
+        block.nTime          = nTime;
+        block.nBits          = nBits;
+        block.nNonce         = nNonce;
+        block.has_oracle     = has_oracle;
+        block.oracle         = oracle;
+        block.is_readwrite_mode = true;
+        block.vtx.resize(vtx.size());
+        std::copy(vtx.begin(), vtx.end(), block.vtx.begin());
+        block.fChecked       = fChecked;
         return block;
     }
 
