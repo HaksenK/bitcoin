@@ -259,6 +259,9 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
                 pindexNew->nNonce         = diskindex.nNonce;
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nTx            = diskindex.nTx;
+                // added to save and load oracle
+                pindexNew->has_oracle     = diskindex.has_oracle;
+                pindexNew->oracle         = diskindex.oracle;
 
                 if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, consensusParams))
                     return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());

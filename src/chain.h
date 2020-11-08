@@ -377,8 +377,10 @@ public:
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
         // added for oracle
-        READWRITE(obj.has_oracle);
-        READWRITE(obj.oracle);
+        if (obj.nVersion > 0x30000000) {
+            READWRITE(obj.has_oracle);
+            READWRITE(obj.oracle);
+        }
     }
 
     uint256 GetBlockHash() const
