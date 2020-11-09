@@ -1141,7 +1141,6 @@ static bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const CMessa
         return error("WriteBlockToDisk: OpenBlockFile failed");
 
     // Write index header
-//    unsigned int nSize = GetSerializeSize(block, fileout.GetVersion());
     unsigned int nSize = GetSerializeSize(writableBlock, fileout.GetVersion());
     fileout << messageStart << nSize;
 
@@ -1150,7 +1149,6 @@ static bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const CMessa
     if (fileOutPos < 0)
         return error("WriteBlockToDisk: ftell failed");
     pos.nPos = (unsigned int)fileOutPos;
-//    fileout << block;
     fileout << writableBlock;
 
     return true;
@@ -3207,6 +3205,11 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
     pindexNew->RaiseValidity(BLOCK_VALID_TREE);
     if (pindexBestHeader == nullptr || pindexBestHeader->nChainWork < pindexNew->nChainWork)
         pindexBestHeader = pindexNew;
+/*
+    // oracle addition test
+    pindexNew->oracle = pindexNew->hashMerkleRoot;
+    pindexNew->has_oracle = true;
+*/
 
     setDirtyBlockIndex.insert(pindexNew);
 
@@ -4100,7 +4103,40 @@ fs::path GetBlockPosFilename(const FlatFilePos &pos)
     return BlockFileSeq().FileName(pos);
 }
 
-CBlockIndex * BlockManager::InsertBlockIndex(const uint256& hash)
+CBlockIndex * BlockManager::InsertBlockIndex(const uint256& hash, const uint256& hashWithOracle)
+{
+    AssertLockHeld(cs_main);
+
+    if (hash.IsNull())
+        return nullptr;
+
+    // Return existing
+    BlockMap::iterator mi = m_block_index.find(hash);
+    BlockMap::iterator miWithOracle = m_block_index.find(hashWithOracle);
+    if (mi != m_block_index.end()) {
+        // if found a block with hash
+        if (hash != hashWithOracle)
+            m_block_index.insert(std::make_pair(hashWithOracle, (*mi).second));
+        (*mi).second->phashBlockWithOracle = &hashWithOracle;
+        return (*mi).second;
+    } else if (miWithOracle != m_block_index.end()) {
+        // if found a block with hashWithOracle
+        m_block_index.insert(std::make_pair(hash, (*miWithOracle).second));
+        (*miWithOracle).second->phashBlock = &hash;
+        return (*miWithOracle).second;
+    }
+
+    // Create new
+    CBlockIndex* pindexNew = new CBlockIndex();
+    mi = m_block_index.insert(std::make_pair(hash, pindexNew)).first;
+    miWithOracle = m_block_index.insert(std::make_pair(hashWithOracle, pindexNew)).first;
+    pindexNew->phashBlock = &((*mi).first);
+    pindexNew->phashBlockWithOracle = &((*miWithOracle).first);
+
+    return pindexNew;
+}
+
+CBlockIndex * BlockManager::InsertPrevBlockIndex(const uint256& hash)
 {
     AssertLockHeld(cs_main);
 
@@ -4115,7 +4151,9 @@ CBlockIndex * BlockManager::InsertBlockIndex(const uint256& hash)
     // Create new
     CBlockIndex* pindexNew = new CBlockIndex();
     mi = m_block_index.insert(std::make_pair(hash, pindexNew)).first;
+    // set the same phash to phashBlock and phashBlockWithOracle. It will be corrected in InsertBlockIndex function
     pindexNew->phashBlock = &((*mi).first);
+    pindexNew->phashBlockWithOracle = &((*mi).first);
 
     return pindexNew;
 }
@@ -4125,7 +4163,7 @@ bool BlockManager::LoadBlockIndex(
     CBlockTreeDB& blocktree,
     std::set<CBlockIndex*, CBlockIndexWorkComparator>& block_index_candidates)
 {
-    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash); }))
+    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash, const uint256& hashWithOracle) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash, hashWithOracle); }, [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertPrevBlockIndex(hash); } ))
         return false;
 
     // Calculate nChainWork
@@ -4823,10 +4861,20 @@ void CChainState::CheckBlockIndex(const Consensus::Params& consensusParams, bool
     // Build forward-pointing map of the entire block tree.
     std::multimap<CBlockIndex*,CBlockIndex*> forward;
     for (const std::pair<const uint256, CBlockIndex*>& entry : m_blockman.m_block_index) {
-        forward.insert(std::make_pair(entry.second->pprev, entry.second));
+        std::pair<std::multimap<CBlockIndex*,CBlockIndex*>::iterator, std::multimap<CBlockIndex*,CBlockIndex*>::iterator> eqrange = forward.equal_range(entry.second->pprev);
+        bool to_insert = true;
+        for (auto itr = eqrange.first; itr != eqrange.second; ++itr) {
+            if(itr->second == entry.second) {
+                to_insert = false;
+                break;
+            }
+        }
+        if (to_insert)
+            forward.insert(std::make_pair(entry.second->pprev, entry.second));
     }
 
-    assert(forward.size() == m_blockman.m_block_index.size());
+    // Since m_block_index has the same block for hash and hashWithOracle, forward-pointing map is smaller than it
+//    assert(forward.size() == m_blockman.m_block_index.size());
 
     std::pair<std::multimap<CBlockIndex*,CBlockIndex*>::iterator,std::multimap<CBlockIndex*,CBlockIndex*>::iterator> rangeGenesis = forward.equal_range(nullptr);
     CBlockIndex *pindex = rangeGenesis.first->second;
@@ -5206,8 +5254,15 @@ public:
     ~CMainCleanup() {
         // block headers
         BlockMap::iterator it1 = g_chainman.BlockIndex().begin();
-        for (; it1 != g_chainman.BlockIndex().end(); it1++)
-            delete (*it1).second;
+        // Since BlockIndex(BlockMap) is a map which translates uint256 to CBlockIndex* and now both hash and hashWithOracle indicates the same CBlockIndex*, we must manage to prevent double deletion.
+        std::vector<void*> deletedPointers;
+        for (; it1 != g_chainman.BlockIndex().end(); it1++) {
+            if (std::find(deletedPointers.begin(), deletedPointers.end(), (*it1).second) != deletedPointers.end()) {
+                delete (*it1).second;
+                deletedPointers.push_back((*it1).second);
+            }
+        }
+        deletedPointers.clear();
         g_chainman.BlockIndex().clear();
     }
 };

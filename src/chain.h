@@ -383,7 +383,7 @@ public:
         }
     }
 
-    uint256 GetBlockHash() const
+    uint256 GetBlockHash(bool oracle_is_activated = false) const
     {
         CBlockHeader block;
         block.nVersion        = nVersion;
@@ -396,7 +396,7 @@ public:
         block.has_oracle      = has_oracle;
         block.oracle          = oracle;
         block.is_readwrite_mode = false;
-        return block.GetHash();
+        return block.GetHash(oracle_is_activated);
     }
 
 
