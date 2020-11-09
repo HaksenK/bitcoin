@@ -5258,7 +5258,7 @@ public:
         // Since BlockIndex(BlockMap) is a map which translates uint256 to CBlockIndex* and now both hash and hashWithOracle indicates the same CBlockIndex*, we must manage to prevent double deletion.
         std::vector<void*> deletedPointers;
         for (; it1 != g_chainman.BlockIndex().end(); it1++) {
-            if (std::find(deletedPointers.begin(), deletedPointers.end(), (*it1).second) != deletedPointers.end()) {
+            if (std::find(deletedPointers.begin(), deletedPointers.end(), (*it1).second) == deletedPointers.end()) {
                 delete (*it1).second;
                 deletedPointers.push_back((*it1).second);
             }
