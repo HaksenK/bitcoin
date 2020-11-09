@@ -244,7 +244,7 @@ public:
     uint256 GetBlockHash(bool oracle_is_activated = false) const
     {
         // added for oracle
-        if(oracle_is_activated)
+        if(oracle_is_activated && has_oracle)
             return *phashBlockWithOracle;
         else
             return *phashBlock;
