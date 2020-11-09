@@ -4861,6 +4861,7 @@ void CChainState::CheckBlockIndex(const Consensus::Params& consensusParams, bool
     // Build forward-pointing map of the entire block tree.
     std::multimap<CBlockIndex*,CBlockIndex*> forward;
     for (const std::pair<const uint256, CBlockIndex*>& entry : m_blockman.m_block_index) {
+        // insert iff the same pair is not in forward
         std::pair<std::multimap<CBlockIndex*,CBlockIndex*>::iterator, std::multimap<CBlockIndex*,CBlockIndex*>::iterator> eqrange = forward.equal_range(entry.second->pprev);
         bool to_insert = true;
         for (auto itr = eqrange.first; itr != eqrange.second; ++itr) {
