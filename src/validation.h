@@ -395,6 +395,11 @@ public:
     /** Clear all data members. */
     void Unload() EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+    /** Added for oracle*/
+    int MaxHeightExcept(CBlockIndex* pindex);
+    std::vector<CBlockIndex*> LookupBlockIndexFromHeight(int height);
+    void AddOracleIfNeeded(CBlockIndex* pindex);
+
     CBlockIndex* AddToBlockIndex(const CBlockHeader& block) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     /** Create a new block index entry for a given block hash */
     CBlockIndex* InsertBlockIndex(const uint256& hash, const uint256& hashWithOracle) EXCLUSIVE_LOCKS_REQUIRED(cs_main);

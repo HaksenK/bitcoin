@@ -3165,6 +3165,63 @@ void ResetBlockFailureFlags(CBlockIndex *pindex) {
     return ::ChainstateActive().ResetBlockFailureFlags(pindex);
 }
 
+// added for oracle
+int BlockManager::MaxHeightExcept(CBlockIndex* pindex) {
+    // finds max height of blockindices except pindex
+    LOCK(cs_main);
+    int maxHeight = -1;
+    for (auto itr = m_block_index.begin(); itr != m_block_index.end(); ++itr) {
+        if (itr->second->nHeight > maxHeight && itr->first != *(pindex->phashBlock))
+            maxHeight = itr->second->nHeight;
+    }
+
+    return maxHeight;
+}
+
+// added for oracle
+std::vector<CBlockIndex*> BlockManager::LookupBlockIndexFromHeight(int height) {
+    // finds blockindices whose nHeight is height
+    LOCK(cs_main);
+    std::vector<CBlockIndex*> vpsameHeightIndices;
+    for (auto itr = m_block_index.begin(); itr != m_block_index.end(); ++itr) {
+        if (itr->second->nHeight == height)
+            vpsameHeightIndices.emplace_back(itr->second);
+    }
+
+    return vpsameHeightIndices;
+}
+
+// added for oracle
+void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
+    int tipHeight = MaxHeightExcept(pindex);
+    if (tipHeight == pindex->nHeight) {
+        std::vector<CBlockIndex*> vpsameHeightIndices = LookupBlockIndexFromHeight(tipHeight);
+        uint256 oracle;
+        oracle.SetNull();
+        // make oracle
+        for (auto itr = vpsameHeightIndices.begin(); itr != vpsameHeightIndices.end(); ++itr)
+            oracle ^= *((*itr)->phashBlock);
+
+        // set oracle for all blocks with the same height
+        for (auto itr = vpsameHeightIndices.begin(); itr != vpsameHeightIndices.end(); ++itr) {
+            (*itr)->oracle.SetNull();
+            (*itr)->has_oracle = true;
+            (*itr)->oracle = oracle;
+            // reset phashBlockWithOracle
+            uint256 hashBlockWithOracle = (*itr)->GetBlockHeader().GetHash(true);
+            {
+                LOCK(cs_main);
+                BlockMap::iterator mi = m_block_index.insert(std::make_pair(hashBlockWithOracle, *itr)).first;
+                (*itr)->phashBlockWithOracle = &((*mi).first);
+            }
+        }
+    } else {
+        uint256 dummyHashWithOracle;
+        dummyHashWithOracle.SetNull();
+        pindex->phashBlockWithOracle = &dummyHashWithOracle;
+    }
+}
+
 CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
 {
     AssertLockHeld(cs_main);
@@ -3183,16 +3240,6 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
     pindexNew->nSequenceId = 0;
     BlockMap::iterator mi = m_block_index.insert(std::make_pair(hash, pindexNew)).first;
     pindexNew->phashBlock = &((*mi).first);
-    // added for oracle
-    if (pindexNew->has_oracle) {
-        uint256 hashBlockWithOracle = block.GetHash(true);
-        pindexNew->phashBlockWithOracle = &hashBlockWithOracle;
-        m_block_index.insert(std::make_pair(hashBlockWithOracle, pindexNew));
-    } else {
-        uint256 dummyHashWithOracle;
-        dummyHashWithOracle.SetNull();
-        pindexNew->phashBlockWithOracle = &dummyHashWithOracle;
-    }
     BlockMap::iterator miPrev = m_block_index.find(block.hashPrevBlock);
     if (miPrev != m_block_index.end())
     {
@@ -3205,11 +3252,8 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
     pindexNew->RaiseValidity(BLOCK_VALID_TREE);
     if (pindexBestHeader == nullptr || pindexBestHeader->nChainWork < pindexNew->nChainWork)
         pindexBestHeader = pindexNew;
-/*
-    // oracle addition test
-    pindexNew->oracle = pindexNew->hashMerkleRoot;
-    pindexNew->has_oracle = true;
-*/
+    // added for oracle
+    AddOracleIfNeeded(pindexNew);
 
     setDirtyBlockIndex.insert(pindexNew);
 
@@ -4115,14 +4159,18 @@ CBlockIndex * BlockManager::InsertBlockIndex(const uint256& hash, const uint256&
     BlockMap::iterator miWithOracle = m_block_index.find(hashWithOracle);
     if (mi != m_block_index.end()) {
         // if found a block with hash
-        if (hash != hashWithOracle)
-            m_block_index.insert(std::make_pair(hashWithOracle, (*mi).second));
-        (*mi).second->phashBlockWithOracle = &hashWithOracle;
+        if (hash != hashWithOracle) {
+            // If so then hashWithOracle is a local variable. If you assigned its pointer, the data the pointer indicates would be lost when return.
+            BlockMap::iterator mi2 = m_block_index.insert(std::make_pair(hashWithOracle, (*mi).second)).first;
+            (*mi).second->phashBlockWithOracle = &((*mi2).first);
+        } else {
+            (*mi).second->phashBlockWithOracle = &hashWithOracle;
+        }
         return (*mi).second;
     } else if (miWithOracle != m_block_index.end()) {
         // if found a block with hashWithOracle
-        m_block_index.insert(std::make_pair(hash, (*miWithOracle).second));
-        (*miWithOracle).second->phashBlock = &hash;
+        BlockMap::iterator mi2 = m_block_index.insert(std::make_pair(hash, (*miWithOracle).second)).first;
+        (*miWithOracle).second->phashBlock = &((*mi2).first);
         return (*miWithOracle).second;
     }
 
