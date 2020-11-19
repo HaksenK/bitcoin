@@ -414,7 +414,7 @@ static UniValue generateBlockNextToBlockIndex(ChainstateManager& chainman, const
             {
                 LOCK(cs_main);
                 CCoinsViewCache view(&::ChainstateActive().CoinsTip());
-                assert(view.GetBestBlock() == pindexDelete->GetBlockHash());
+                assert(view.GetBestBlock() == pindexDelete->GetBlockHash(true));
                 if (::ChainstateActive().DisconnectBlock(block, pindexDelete, view) != DISCONNECT_OK)
                     exit(1);
                 assert(view.Flush());

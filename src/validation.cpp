@@ -1764,7 +1764,7 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockI
     }
 
     // move best block pointer to prevout block
-    view.SetBestBlock(pindex->pprev->GetBlockHash());
+    view.SetBestBlock(pindex->pprev->GetBlockHash(true));
 
     return fClean ? DISCONNECT_OK : DISCONNECT_UNCLEAN;
 }
@@ -1970,7 +1970,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     }
 
     // verify that the view's current state corresponds to the previous block
-    uint256 hashPrevBlock = pindex->pprev == nullptr ? uint256() : pindex->pprev->GetBlockHash();
+    uint256 hashPrevBlock = pindex->pprev == nullptr ? uint256() : pindex->pprev->GetBlockHash(true);
     assert(hashPrevBlock == view.GetBestBlock());
 
     nBlocksTotal++;
@@ -1979,7 +1979,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     // (its coinbase is unspendable)
     if (block.GetHash() == chainparams.GetConsensus().hashGenesisBlock) {
         if (!fJustCheck)
-            view.SetBestBlock(pindex->GetBlockHash());
+            view.SetBestBlock(pindex->GetBlockHash(true));
         return true;
     }
 
@@ -2230,7 +2230,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
 
     assert(pindex->phashBlock);
     // add this block to the view's block chain
-    view.SetBestBlock(pindex->GetBlockHash());
+    view.SetBestBlock(pindex->GetBlockHash(true));
 
     int64_t nTime5 = GetTimeMicros(); nTimeIndex += nTime5 - nTime4;
     LogPrint(BCLog::BENCH, "    - Index writing: %.2fms [%.2fs (%.2fms/blk)]\n", MILLI * (nTime5 - nTime4), nTimeIndex * MICRO, nTimeIndex * MILLI / nBlocksTotal);
@@ -2511,7 +2511,7 @@ bool CChainState::DisconnectTip(BlockValidationState& state, const CChainParams&
     int64_t nStart = GetTimeMicros();
     {
         CCoinsViewCache view(&CoinsTip());
-        assert(view.GetBestBlock() == pindexDelete->GetBlockHash());
+        assert(view.GetBestBlock() == pindexDelete->GetBlockHash(true));
         if (DisconnectBlock(block, pindexDelete, view) != DISCONNECT_OK)
             return error("DisconnectTip(): DisconnectBlock %s failed", pindexDelete->GetBlockHash().ToString());
         bool flushed = view.Flush();
@@ -3193,7 +3193,13 @@ std::vector<CBlockIndex*> BlockManager::LookupBlockIndexFromHeight(int height) {
 
 // added for oracle
 void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
+    #if 1
     int tipHeight = MaxHeightExcept(pindex);
+    #else
+    int tipHeight = pindex->nHeight;
+    std::vector<CBlockIndex*> aaaaa = LookupBlockIndexFromHeight(tipHeight);
+    if(aaaaa.size()<=1) tipHeight--;
+    #endif
     if (tipHeight == pindex->nHeight) {
         std::vector<CBlockIndex*> vpsameHeightIndices = LookupBlockIndexFromHeight(tipHeight);
         uint256 oracle;
@@ -4417,7 +4423,7 @@ bool CVerifyDB::VerifyDB(const CChainParams& chainparams, CCoinsView *coinsview,
         }
         // check level 3: check for inconsistencies during memory-only disconnect of tip blocks
         if (nCheckLevel >= 3 && (coins.DynamicMemoryUsage() + ::ChainstateActive().CoinsTip().DynamicMemoryUsage()) <= nCoinCacheUsage) {
-            assert(coins.GetBestBlock() == pindex->GetBlockHash());
+            assert(coins.GetBestBlock() == pindex->GetBlockHash(true));
             DisconnectResult res = ::ChainstateActive().DisconnectBlock(block, pindex, coins);
             if (res == DISCONNECT_FAILED) {
                 return error("VerifyDB(): *** irrecoverable inconsistency in block data at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
@@ -4545,7 +4551,7 @@ bool CChainState::ReplayBlocks(const CChainParams& params)
         if (!RollforwardBlock(pindex, cache, params)) return false;
     }
 
-    cache.SetBestBlock(pindexNew->GetBlockHash());
+    cache.SetBestBlock(pindexNew->GetBlockHash(true));
     cache.Flush();
     uiInterface.ShowProgress("", 100, false);
     return true;
