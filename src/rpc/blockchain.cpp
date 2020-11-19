@@ -139,8 +139,10 @@ UniValue blockheaderToJSON(const CBlockIndex* tip, const CBlockIndex* blockindex
     result.pushKV("hasoracle", (int)blockindex->has_oracle);
     result.pushKV("oracle", blockindex->oracle.GetHex());
 
-    if (blockindex->pprev)
-        result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
+    if (blockindex->pprev) {
+        result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash(true).GetHex());
+        result.pushKV("hash_ifprevwithoutoracle", blockindex->GetHashIfPrevWithoutOracle().GetHex());
+    }
     if (pnext)
         result.pushKV("nextblockhash", pnext->GetBlockHash().GetHex());
     return result;
@@ -187,8 +189,10 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* tip, const CBlockIn
     result.pushKV("chainwork", blockindex->nChainWork.GetHex());
     result.pushKV("nTx", (uint64_t)blockindex->nTx);
 
-    if (blockindex->pprev)
-        result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash().GetHex());
+    if (blockindex->pprev) {
+        result.pushKV("previousblockhash", blockindex->pprev->GetBlockHash(true).GetHex());
+        result.pushKV("hash_ifprevwithoutoracle", blockindex->GetHashIfPrevWithoutOracle().GetHex());
+    }
     if (pnext)
         result.pushKV("nextblockhash", pnext->GetBlockHash().GetHex());
     return result;

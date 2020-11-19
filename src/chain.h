@@ -229,7 +229,7 @@ public:
         CBlockHeader block;
         block.nVersion       = nVersion;
         if (pprev)
-            block.hashPrevBlock = pprev->GetBlockHash();
+            block.hashPrevBlock = pprev->GetBlockHash(true);
         block.hashMerkleRoot = hashMerkleRoot;
         block.nTime          = nTime;
         block.nBits          = nBits;
@@ -239,6 +239,23 @@ public:
         block.oracle         = oracle;
         block.is_readwrite_mode = false;
         return block;
+    }
+
+    // to test if hashWithOracle of the previous block has an effect on the hash of this block
+    uint256 GetHashIfPrevWithoutOracle() const
+    {
+        CBlockHeader block;
+        block.SetNull();
+        block.nVersion       = nVersion;
+        if (pprev)
+            block.hashPrevBlock = pprev->GetBlockHash();
+        block.hashMerkleRoot = hashMerkleRoot;
+        block.nTime          = nTime;
+        block.nBits          = nBits;
+        block.nNonce         = nNonce;
+        // added for oracle
+        block.has_oracle     = false;
+        return block.GetHash();
     }
 
     uint256 GetBlockHash(bool oracle_is_activated = false) const
@@ -354,7 +371,7 @@ public:
     }
 
     explicit CDiskBlockIndex(const CBlockIndex* pindex) : CBlockIndex(*pindex) {
-        hashPrev = (pprev ? pprev->GetBlockHash() : uint256());
+        hashPrev = (pprev ? pprev->GetBlockHash(true) : uint256());
     }
 
     SERIALIZE_METHODS(CDiskBlockIndex, obj)

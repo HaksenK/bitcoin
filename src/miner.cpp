@@ -169,7 +169,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     LogPrintf("CreateNewBlock(): block weight: %u txs: %u fees: %ld sigops %d\n", GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
 
     // Fill in header
-    pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
+    pblock->hashPrevBlock  = pindexPrev->GetBlockHash(true);
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nNonce         = 0;
@@ -257,7 +257,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     LogPrintf("CreateNewBlock(): block weight: %u txs: %u fees: %ld sigops %d\n", GetBlockWeight(*pblock), nBlockTx, nFees, nBlockSigOpsCost);
 
     // Fill in header
-    pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
+    pblock->hashPrevBlock  = pindexPrev->GetBlockHash(true);
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nNonce         = 0;
