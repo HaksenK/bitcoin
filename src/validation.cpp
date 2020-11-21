@@ -3237,7 +3237,6 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
             }
         }
         CheckStatusInvalidHashBlocks(vpsameHeightIndices);
-
     } else {
         uint256 dummyHashWithOracle;
         dummyHashWithOracle.SetNull();
