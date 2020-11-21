@@ -397,7 +397,8 @@ public:
 
     /** Added for oracle*/
     int MaxHeightExcept(CBlockIndex* pindex);
-    std::vector<CBlockIndex*> LookupBlockIndexFromHeight(int height);
+    std::vector<CBlockIndex*> LookupBlockIndicesFromHeight(int height);
+    void CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsameHeightIndices);
     void AddOracleIfNeeded(CBlockIndex* pindex);
 
     CBlockIndex* AddToBlockIndex(const CBlockHeader& block) EXCLUSIVE_LOCKS_REQUIRED(cs_main);

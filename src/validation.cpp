@@ -3179,7 +3179,7 @@ int BlockManager::MaxHeightExcept(CBlockIndex* pindex) {
 }
 
 // added for oracle
-std::vector<CBlockIndex*> BlockManager::LookupBlockIndexFromHeight(int height) {
+std::vector<CBlockIndex*> BlockManager::LookupBlockIndicesFromHeight(int height) {
     // finds blockindices whose nHeight is height
     LOCK(cs_main);
     std::vector<CBlockIndex*> vpsameHeightIndices;
@@ -3191,17 +3191,32 @@ std::vector<CBlockIndex*> BlockManager::LookupBlockIndexFromHeight(int height) {
     return vpsameHeightIndices;
 }
 
+void BlockManager::CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsameHeightIndices) {
+    if (vpsameHeightIndices.size() == 0)
+        return;
+
+    int nHeight = vpsameHeightIndices.at(0)->nHeight;
+    std::vector<CBlockIndex*> vpnextHeightBlockIndex = LookupBlockIndicesFromHeight(nHeight+1);
+
+    for (auto itr = vpnextHeightBlockIndex.begin(); itr != vpnextHeightBlockIndex.end(); ++itr) {
+        if (std::find(vpsameHeightIndices.begin(), vpsameHeightIndices.end(), (*itr)->pprev) == vpsameHeightIndices.end())
+            continue;
+        if ((*itr)->GetBlockHash() != (*itr)->GetBlockHeader().GetHash())
+            (*itr)->nStatus |= BLOCK_FAILED_VALID;
+    }
+}
+
 // added for oracle
 void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
-    #if 1
+    #if 0
     int tipHeight = MaxHeightExcept(pindex);
     #else
     int tipHeight = pindex->nHeight;
-    std::vector<CBlockIndex*> aaaaa = LookupBlockIndexFromHeight(tipHeight);
+    std::vector<CBlockIndex*> aaaaa = LookupBlockIndicesFromHeight(tipHeight);
     if(aaaaa.size()<=1) tipHeight--;
     #endif
     if (tipHeight == pindex->nHeight) {
-        std::vector<CBlockIndex*> vpsameHeightIndices = LookupBlockIndexFromHeight(tipHeight);
+        std::vector<CBlockIndex*> vpsameHeightIndices = LookupBlockIndicesFromHeight(tipHeight);
         uint256 oracle;
         oracle.SetNull();
         // make oracle
@@ -3221,6 +3236,8 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
                 (*itr)->phashBlockWithOracle = &((*mi).first);
             }
         }
+        CheckStatusInvalidHashBlocks(vpsameHeightIndices);
+
     } else {
         uint256 dummyHashWithOracle;
         dummyHashWithOracle.SetNull();
