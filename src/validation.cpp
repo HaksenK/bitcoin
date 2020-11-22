@@ -3184,7 +3184,7 @@ std::vector<CBlockIndex*> BlockManager::LookupBlockIndicesFromHeight(int height)
     LOCK(cs_main);
     std::vector<CBlockIndex*> vpsameHeightIndices;
     for (auto itr = m_block_index.begin(); itr != m_block_index.end(); ++itr) {
-        if (itr->second->nHeight == height)
+        if (itr->second->nHeight == height && !(itr->second->nStatus & BLOCK_FAILED_MASK))
             vpsameHeightIndices.emplace_back(itr->second);
     }
 
@@ -3198,11 +3198,14 @@ void BlockManager::CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsame
     int nHeight = vpsameHeightIndices.at(0)->nHeight;
     std::vector<CBlockIndex*> vpnextHeightBlockIndex = LookupBlockIndicesFromHeight(nHeight+1);
 
+    BlockValidationState state;
+    const CChainParams& chainparams = Params();
     for (auto itr = vpnextHeightBlockIndex.begin(); itr != vpnextHeightBlockIndex.end(); ++itr) {
         if (std::find(vpsameHeightIndices.begin(), vpsameHeightIndices.end(), (*itr)->pprev) == vpsameHeightIndices.end())
             continue;
         if ((*itr)->GetBlockHash() != (*itr)->GetBlockHeader().GetHash())
-            (*itr)->nStatus |= BLOCK_FAILED_VALID;
+            InvalidateBlock(state, chainparams, *itr);
+            (*itr)-> nStatus |= BLOCK_FAILED_PREVORACLE;
     }
 }
 
@@ -4173,26 +4176,20 @@ CBlockIndex * BlockManager::InsertBlockIndex(const uint256& hash, const uint256&
 {
     AssertLockHeld(cs_main);
 
-    if (hash.IsNull())
+    if (hash.IsNull() || hashWithOracle.IsNull())
         return nullptr;
 
     // Return existing
     BlockMap::iterator mi = m_block_index.find(hash);
     BlockMap::iterator miWithOracle = m_block_index.find(hashWithOracle);
-    if (mi != m_block_index.end()) {
+    if (mi != m_block_index.end() && miWithOracle != m_block_index.end()) {
         // if found a block with hash
-        if (hash != hashWithOracle) {
-            // If so then hashWithOracle is a local variable. If you assigned its pointer, the data the pointer indicates would be lost when return.
-            BlockMap::iterator mi2 = m_block_index.insert(std::make_pair(hashWithOracle, (*mi).second)).first;
-            (*mi).second->phashBlockWithOracle = &((*mi2).first);
-        } else {
-            (*mi).second->phashBlockWithOracle = &hashWithOracle;
-        }
+        return (*mi).second;
+    } else if (mi != m_block_index.end()) {
+        m_block_index.insert(std::make_pair(hashWithOracle, (*mi).second));
         return (*mi).second;
     } else if (miWithOracle != m_block_index.end()) {
-        // if found a block with hashWithOracle
-        BlockMap::iterator mi2 = m_block_index.insert(std::make_pair(hash, (*miWithOracle).second)).first;
-        (*miWithOracle).second->phashBlock = &((*mi2).first);
+        m_block_index.insert(std::make_pair(hash, (*miWithOracle).second));
         return (*miWithOracle).second;
     }
 
@@ -4206,34 +4203,12 @@ CBlockIndex * BlockManager::InsertBlockIndex(const uint256& hash, const uint256&
     return pindexNew;
 }
 
-CBlockIndex * BlockManager::InsertPrevBlockIndex(const uint256& hash)
-{
-    AssertLockHeld(cs_main);
-
-    if (hash.IsNull())
-        return nullptr;
-
-    // Return existing
-    BlockMap::iterator mi = m_block_index.find(hash);
-    if (mi != m_block_index.end())
-        return (*mi).second;
-
-    // Create new
-    CBlockIndex* pindexNew = new CBlockIndex();
-    mi = m_block_index.insert(std::make_pair(hash, pindexNew)).first;
-    // set the same phash to phashBlock and phashBlockWithOracle. It will be corrected in InsertBlockIndex function
-    pindexNew->phashBlock = &((*mi).first);
-    pindexNew->phashBlockWithOracle = &((*mi).first);
-
-    return pindexNew;
-}
-
 bool BlockManager::LoadBlockIndex(
     const Consensus::Params& consensus_params,
     CBlockTreeDB& blocktree,
     std::set<CBlockIndex*, CBlockIndexWorkComparator>& block_index_candidates)
 {
-    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash, const uint256& hashWithOracle) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash, hashWithOracle); }, [this](const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertPrevBlockIndex(hash); } ))
+    if (!blocktree.LoadBlockIndexGuts(consensus_params, [this](const uint256& hash, const uint256& hashWithOracle) EXCLUSIVE_LOCKS_REQUIRED(cs_main) { return this->InsertBlockIndex(hash, hashWithOracle); } ))
         return false;
 
     // Calculate nChainWork

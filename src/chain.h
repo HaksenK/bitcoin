@@ -124,7 +124,8 @@ enum BlockStatus: uint32_t {
 
     BLOCK_FAILED_VALID       =   32, //!< stage after last reached validness failed
     BLOCK_FAILED_CHILD       =   64, //!< descends from failed block
-    BLOCK_FAILED_MASK        =   BLOCK_FAILED_VALID | BLOCK_FAILED_CHILD,
+    BLOCK_FAILED_PREVORACLE  =  256, //!< the previous block got oracle after this block was created
+    BLOCK_FAILED_MASK        =   BLOCK_FAILED_VALID | BLOCK_FAILED_CHILD | BLOCK_FAILED_PREVORACLE,
 
     BLOCK_OPT_WITNESS       =   128, //!< block data in blk*.data was received with a witness-enforcing client
 };
@@ -365,13 +366,16 @@ class CDiskBlockIndex : public CBlockIndex
 {
 public:
     uint256 hashPrev;
+    uint256 hashPrevWithOracle;
 
     CDiskBlockIndex() {
         hashPrev = uint256();
+        hashPrevWithOracle = uint256();
     }
 
     explicit CDiskBlockIndex(const CBlockIndex* pindex) : CBlockIndex(*pindex) {
-        hashPrev = (pprev ? pprev->GetBlockHash(true) : uint256());
+        hashPrev = (pprev ? pprev->GetBlockHash() : uint256());
+        hashPrevWithOracle = (pprev ? pprev->GetBlockHash(true) : uint256());
     }
 
     SERIALIZE_METHODS(CDiskBlockIndex, obj)
@@ -397,14 +401,18 @@ public:
         if (obj.nVersion > 0x30000000) {
             READWRITE(obj.has_oracle);
             READWRITE(obj.oracle);
+            READWRITE(obj.hashPrevWithOracle);
         }
     }
 
-    uint256 GetBlockHash(bool oracle_is_activated = false) const
+    uint256 GetBlockHash(bool oracle_is_activated = false, bool consider_prevoracle = false) const
     {
         CBlockHeader block;
         block.nVersion        = nVersion;
-        block.hashPrevBlock   = hashPrev;
+        if (consider_prevoracle && nVersion > 0x30000000)
+            block.hashPrevBlock   = hashPrevWithOracle;
+        else
+            block.hashPrevBlock   = hashPrev;
         block.hashMerkleRoot  = hashMerkleRoot;
         block.nTime           = nTime;
         block.nBits           = nBits;

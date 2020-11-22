@@ -232,7 +232,7 @@ bool CBlockTreeDB::ReadFlag(const std::string &name, bool &fValue) {
     return true;
 }
 
-bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, std::function<CBlockIndex*(const uint256&, const uint256&)> insertBlockIndex, std::function<CBlockIndex*(const uint256&)> insertBlockIndex2)
+bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, std::function<CBlockIndex*(const uint256&, const uint256&)> insertBlockIndex)
 {
     std::unique_ptr<CDBIterator> pcursor(NewIterator());
 
@@ -246,8 +246,8 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
             CDiskBlockIndex diskindex;
             if (pcursor->GetValue(diskindex)) {
                 // Construct block index object
-                CBlockIndex* pindexNew = insertBlockIndex(diskindex.GetBlockHash(), diskindex.GetBlockHash(true));
-                pindexNew->pprev          = insertBlockIndex2(diskindex.hashPrev);
+                CBlockIndex* pindexNew = insertBlockIndex(diskindex.GetBlockHash(false, !(diskindex.nStatus & BLOCK_FAILED_PREVORACLE)), diskindex.GetBlockHash(true, !(diskindex.nStatus & BLOCK_FAILED_PREVORACLE)));
+                pindexNew->pprev          = insertBlockIndex(diskindex.hashPrev, diskindex.hashPrevWithOracle);
                 pindexNew->nHeight        = diskindex.nHeight;
                 pindexNew->nFile          = diskindex.nFile;
                 pindexNew->nDataPos       = diskindex.nDataPos;
