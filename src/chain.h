@@ -407,6 +407,13 @@ public:
 
     uint256 GetBlockHash(bool oracle_is_activated = false, bool consider_prevoracle = false) const
     {
+        // This function is called in CBlockTreeDB::LoadBlockIndexGuts.
+        // ex. diskindex.GetBlockHash(false, !(diskindex.nStatus & BLOCK_FAILED_PREVORACLE))
+        // A block is invalidated when its ancestor's oracle is changed.
+        // Then the status of the block is marked with BLOCK_FAILED_PREVORACLE.
+        // if diskindex.nStatus & BLOCK_FAILED_PREVORACLE is true, it means that its ancestor was invalidated after it was created.
+        // Then its hash must be calculated without hashPrevBlock with oracle.
+        // If oracle of a previous block was added after the block was created, its hash must be calculated with hashPrevBlock with oracle.
         CBlockHeader block;
         block.nVersion        = nVersion;
         if (consider_prevoracle && nVersion > 0x30000000)

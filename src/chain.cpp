@@ -100,7 +100,6 @@ const CBlockIndex* CBlockIndex::GetAncestor(int height) const
             pindexWalk = pindexWalk->pskip;
             heightWalk = heightSkip;
         } else {
-            std::cout<<"pindexwalk: "<<pindexWalk->ToString()<<std::endl;
             assert(pindexWalk->pprev);
             pindexWalk = pindexWalk->pprev;
             heightWalk--;
