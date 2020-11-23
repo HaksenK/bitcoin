@@ -3171,7 +3171,7 @@ int BlockManager::MaxHeightExcept(CBlockIndex* pindex) {
     LOCK(cs_main);
     int maxHeight = -1;
     for (auto itr = m_block_index.begin(); itr != m_block_index.end(); ++itr) {
-        if (itr->second->nHeight > maxHeight && itr->first != *(pindex->phashBlock))
+        if (itr->second->nHeight > maxHeight && itr->first != *(pindex->phashBlock) && !(itr->second->nStatus & BLOCK_FAILED_MASK))
             maxHeight = itr->second->nHeight;
     }
 
