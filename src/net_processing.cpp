@@ -1336,6 +1336,7 @@ void PeerLogicValidation::UpdatedBlockTip(const CBlockIndex *pindexNew, const CB
 }
 
 // added for oracle
+// an imitation of PeerLogicValidation::UpdatedBlockTip, but this pushes block indices to vBlockHashesWithOracleToAnnounce instead of vBlockHashesToAnnounce
 void PeerLogicValidation::UpdatedBlockBranchWithOracle(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) {
     const int nNewHeight = pindexNew->nHeight;
     connman->SetBestHeight(nNewHeight);
@@ -1870,6 +1871,13 @@ static void ProcessHeadersMessage(CNode& pfrom, CConnman* connman, ChainstateMan
         bool fCanDirectFetch = CanDirectFetch(chainparams.GetConsensus());
         // If this set of headers is valid and ends in a block with at least as
         // much work as our tip, download as much as possible.
+        // Blocks whose height is lower than the tip have nChainWork smaller than that of the tip.
+        // It is to prevent from receiving blocks lower than the tip.
+        // When an oracle is added to a block, however, it must be broadcast to other nodes even if its nChainWork is smaller, to keep consistensy.
+        // To solve it, if the new block has an oracle, it is allowed pass here
+        // to be given MarkBlockAsInFlight and added to mapBlocksInFlight.
+        // If it is not added, MarkBlockAsReceived(hash) will return false and so will forceProcessing in m_chainman.ProcessNewBlock(m_chainparams, pblock, forceProcessing, &fNewBlock).
+        // Then fRequested of CChainState::AcceptBlock will be false, so the block will not be accepted.
         if (fCanDirectFetch && pindexLast->IsValid(BLOCK_VALID_TREE) && (::ChainActive().Tip()->nChainWork <= pindexLast->nChainWork || pindexLast->has_oracle)) {
             std::vector<const CBlockIndex*> vToFetch;
             const CBlockIndex *pindexWalk = pindexLast;
@@ -4117,28 +4125,34 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
                     }
                 }
             }
+            pto->vBlockHashesToAnnounce.clear();
+        }
 
+        //
+        // send block branches with oracle
+        //
+        {
+            LOCK(pto->cs_inventory);
             std::vector<CBlock> tmpvHeader;
             for(auto itr = pto->vBlockHashesWithOracleToAnnounce.begin(); itr != pto->vBlockHashesWithOracleToAnnounce.end(); ++itr) {
-              const CBlockIndex* tmpindex = LookupBlockIndex(*itr);
-              CBlock tmpblock;
-              bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
-              if (could_read) {
-                tmpvHeader.push_back(tmpblock.GetBlockHeader());
-              }
+                const CBlockIndex* tmpindex = LookupBlockIndex(*itr);
+                CBlock tmpblock;
+                bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
+                if (could_read) {
+                    tmpvHeader.push_back(tmpblock.GetBlockHeader());
+                }
             }
-            if(tmpvHeader.size()>0)
-              connman->PushMessage(pto, msgMaker.Make(NetMsgType::HEADERS, tmpvHeader));
+            if(tmpvHeader.size() > 0)
+                connman->PushMessage(pto, msgMaker.Make(NetMsgType::HEADERS, tmpvHeader));
             for(auto itr = pto->vBlockHashesWithOracleToAnnounce.begin(); itr != pto->vBlockHashesWithOracleToAnnounce.end(); ++itr) {
-              const CBlockIndex* tmpindex = LookupBlockIndex(*itr);
-              CBlock tmpblock;
-              bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
-              if (could_read) {
-                connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, tmpblock));
-              }
+                const CBlockIndex* tmpindex = LookupBlockIndex(*itr);
+                CBlock tmpblock;
+                bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
+                if (could_read) {
+                    connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, tmpblock));
+                }
             }
             pto->vBlockHashesWithOracleToAnnounce.clear();
-            pto->vBlockHashesToAnnounce.clear();
         }
 
         //

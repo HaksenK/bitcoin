@@ -3218,7 +3218,7 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
         int tipHeight = pindex->nHeight;
         std::vector<CBlockIndex*> toCountCompetitiveBranches = LookupBlockIndicesFromHeight(tipHeight);
         // If no competitive branch, tipHeight must be smaller than pindex->nHeight to prevent from oracle
-        if(toCountCompetitiveBranches.size()<=1) tipHeight--;
+        if (toCountCompetitiveBranches.size() <= 1) tipHeight--;
     #endif
     if (tipHeight == pindex->nHeight) {
         std::vector<CBlockIndex*> vpsameHeightIndices = LookupBlockIndicesFromHeight(tipHeight);

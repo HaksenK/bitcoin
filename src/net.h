@@ -837,7 +837,7 @@ public:
 
     // Used for headers announcements - unfiltered blocks to relay
     std::vector<uint256> vBlockHashesToAnnounce GUARDED_BY(cs_inventory);
-    // added for oracle
+    // Push blocks to vBlockHashesWithOracleToAnnounce to broadcast simply.
     std::vector<uint256> vBlockHashesWithOracleToAnnounce GUARDED_BY(cs_inventory);
 
     // Block and TXN accept times

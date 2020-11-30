@@ -199,6 +199,7 @@ void CMainSignals::UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockInd
                           fInitialDownload);
 }
 
+// added for oracle
 void CMainSignals::UpdatedBlockBranchWithOracle(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) {
     // Dependencies exist that require UpdatedBlockTip events to be delivered in the order in which
     // the chain actually updates. One way to ensure this is for the caller to invoke this signal
@@ -212,7 +213,6 @@ void CMainSignals::UpdatedBlockBranchWithOracle(const CBlockIndex *pindexNew, co
                           pindexFork ? pindexFork->GetBlockHash().ToString() : "null",
                           fInitialDownload);
 }
-
 
 void CMainSignals::TransactionAddedToMempool(const CTransactionRef& tx) {
     auto event = [tx, this] {
