@@ -3211,15 +3211,15 @@ void BlockManager::CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsame
 
 // added for oracle
 void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
-    #if 0
-        int tipHeight = MaxHeightExcept(pindex);
-    #else
-        // To test when a branch was created against a block older than the tip
-        int tipHeight = pindex->nHeight;
-        std::vector<CBlockIndex*> toCountCompetitiveBranches = LookupBlockIndicesFromHeight(tipHeight);
-        // If no competitive branch, tipHeight must be smaller than pindex->nHeight to prevent from oracle
-        if (toCountCompetitiveBranches.size() <= 1) tipHeight--;
-    #endif
+#if 0
+    int tipHeight = MaxHeightExcept(pindex);
+#else
+    // To test when a branch was created against a block older than the tip
+    int tipHeight = pindex->nHeight;
+    std::vector<CBlockIndex*> toCountCompetitiveBranches = LookupBlockIndicesFromHeight(tipHeight);
+    // If no competitive branch, tipHeight must be smaller than pindex->nHeight to prevent from oracle
+    if (toCountCompetitiveBranches.size() <= 1) tipHeight = -1;
+#endif
     if (tipHeight == pindex->nHeight) {
         std::vector<CBlockIndex*> vpsameHeightIndices = LookupBlockIndicesFromHeight(tipHeight);
         uint256 oracle;
