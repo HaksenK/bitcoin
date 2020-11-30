@@ -1335,6 +1335,37 @@ void PeerLogicValidation::UpdatedBlockTip(const CBlockIndex *pindexNew, const CB
     }
 }
 
+// added for oracle
+void PeerLogicValidation::UpdatedBlockBranchWithOracle(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) {
+    const int nNewHeight = pindexNew->nHeight;
+    connman->SetBestHeight(nNewHeight);
+
+    SetServiceFlagsIBDCache(!fInitialDownload);
+    if (!fInitialDownload) {
+        // Find the hashes of all blocks that weren't previously in the best chain.
+        std::vector<uint256> vHashes;
+        const CBlockIndex *pindexToAnnounce = pindexNew;
+        while (pindexToAnnounce != pindexFork) {
+            vHashes.push_back(pindexToAnnounce->GetBlockHash());
+            pindexToAnnounce = pindexToAnnounce->pprev;
+            if (vHashes.size() == MAX_BLOCKS_TO_ANNOUNCE) {
+                // Limit announcements in case of a huge reorganization.
+                // Rely on the peer's synchronization mechanism in that case.
+                break;
+            }
+        }
+        // Relay inventory, but don't relay old inventory during initial block download.
+        connman->ForEachNode([nNewHeight, &vHashes](CNode* pnode) {
+            if (nNewHeight > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : 0)) {
+                for (const uint256& hash : reverse_iterate(vHashes)) {
+                    pnode->PushBlockHashWithOracle(hash);
+                }
+            }
+        });
+        connman->WakeMessageHandler();
+    }
+}
+
 /**
  * Handle invalid block rejection and consequent peer banning, maintain which
  * peers announce compact blocks.
@@ -1839,7 +1870,7 @@ static void ProcessHeadersMessage(CNode& pfrom, CConnman* connman, ChainstateMan
         bool fCanDirectFetch = CanDirectFetch(chainparams.GetConsensus());
         // If this set of headers is valid and ends in a block with at least as
         // much work as our tip, download as much as possible.
-        if (fCanDirectFetch && pindexLast->IsValid(BLOCK_VALID_TREE) && ::ChainActive().Tip()->nChainWork <= pindexLast->nChainWork) {
+        if (fCanDirectFetch && pindexLast->IsValid(BLOCK_VALID_TREE) && (::ChainActive().Tip()->nChainWork <= pindexLast->nChainWork || pindexLast->has_oracle)) {
             std::vector<const CBlockIndex*> vToFetch;
             const CBlockIndex *pindexWalk = pindexLast;
             // Calculate all the blocks we'd need to switch to pindexLast, up to a limit.
@@ -4086,6 +4117,27 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
                     }
                 }
             }
+
+            std::vector<CBlock> tmpvHeader;
+            for(auto itr = pto->vBlockHashesWithOracleToAnnounce.begin(); itr != pto->vBlockHashesWithOracleToAnnounce.end(); ++itr) {
+              const CBlockIndex* tmpindex = LookupBlockIndex(*itr);
+              CBlock tmpblock;
+              bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
+              if (could_read) {
+                tmpvHeader.push_back(tmpblock.GetBlockHeader());
+              }
+            }
+            if(tmpvHeader.size()>0)
+              connman->PushMessage(pto, msgMaker.Make(NetMsgType::HEADERS, tmpvHeader));
+            for(auto itr = pto->vBlockHashesWithOracleToAnnounce.begin(); itr != pto->vBlockHashesWithOracleToAnnounce.end(); ++itr) {
+              const CBlockIndex* tmpindex = LookupBlockIndex(*itr);
+              CBlock tmpblock;
+              bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
+              if (could_read) {
+                connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, tmpblock));
+              }
+            }
+            pto->vBlockHashesWithOracleToAnnounce.clear();
             pto->vBlockHashesToAnnounce.clear();
         }
 

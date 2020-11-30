@@ -3211,7 +3211,7 @@ void BlockManager::CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsame
 
 // added for oracle
 void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
-    #if 1
+    #if 0
         int tipHeight = MaxHeightExcept(pindex);
     #else
         // To test when a branch was created against a block older than the tip
@@ -3242,6 +3242,10 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
             }
         }
         CheckStatusInvalidHashBlocks(vpsameHeightIndices);
+
+        // broadcast to other nodes
+        const CBlockIndex* pindexFork = ChainActive().FindFork(pindex);
+        GetMainSignals().UpdatedBlockBranchWithOracle(pindex, pindexFork, false);
     } else {
         uint256 dummyHashWithOracle;
         dummyHashWithOracle.SetNull();
@@ -3881,7 +3885,7 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, Block
     if (fAlreadyHave) return true;
     if (!fRequested) {  // If we didn't ask for it:
         if (pindex->nTx != 0) return true;    // This is a previously-processed block that was pruned
-        if (!fHasMoreOrSameWork) return true; // Don't process less-work chains
+        if (!(fHasMoreOrSameWork || pindex->has_oracle)) return true; // Don't process less-work chains
         if (fTooFarAhead) return true;        // Block height is too high
 
         // Protect against DoS attacks from low-work chains.

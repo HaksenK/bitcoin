@@ -837,6 +837,8 @@ public:
 
     // Used for headers announcements - unfiltered blocks to relay
     std::vector<uint256> vBlockHashesToAnnounce GUARDED_BY(cs_inventory);
+    // added for oracle
+    std::vector<uint256> vBlockHashesWithOracleToAnnounce GUARDED_BY(cs_inventory);
 
     // Block and TXN accept times
     std::atomic<int64_t> nLastBlockTime{0};
@@ -992,6 +994,12 @@ public:
     {
         LOCK(cs_inventory);
         vBlockHashesToAnnounce.push_back(hash);
+    }
+
+    void PushBlockHashWithOracle(const uint256 &hash)
+    {
+        LOCK(cs_inventory);
+        vBlockHashesWithOracleToAnnounce.push_back(hash);
     }
 
     void CloseSocketDisconnect();

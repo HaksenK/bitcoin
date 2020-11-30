@@ -45,6 +45,8 @@ public:
      * Overridden from CValidationInterface.
      */
     void UpdatedBlockTip(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) override;
+    // added for oracle
+    void UpdatedBlockBranchWithOracle(const CBlockIndex *pindexNew, const CBlockIndex *pindexFork, bool fInitialDownload) override;
     /**
      * Overridden from CValidationInterface.
      */
