@@ -4134,23 +4134,20 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
         {
             LOCK(pto->cs_inventory);
             std::vector<CBlock> tmpvHeader;
+            std::vector<CBlock> tmpvBlock;
             for (auto hashToAnnounce : pto->vBlockHashesWithOracleToAnnounce) {
                 const CBlockIndex* tmpindex = LookupBlockIndex(hashToAnnounce);
                 CBlock tmpblock;
                 bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
                 if (could_read) {
                     tmpvHeader.push_back(tmpblock.GetBlockHeader());
+                    tmpvBlock.push_back(tmpblock);
                 }
             }
             if (tmpvHeader.size() > 0)
                 connman->PushMessage(pto, msgMaker.Make(NetMsgType::HEADERS, tmpvHeader));
-            for (auto hashToAnnounce : pto->vBlockHashesWithOracleToAnnounce) {
-                const CBlockIndex* tmpindex = LookupBlockIndex(hashToAnnounce);
-                CBlock tmpblock;
-                bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
-                if (could_read) {
-                    connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, tmpblock));
-                }
+            for (auto blockToAnnounce : tmpvBlock) {
+                connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, blockToAnnounce));
             }
             pto->vBlockHashesWithOracleToAnnounce.clear();
         }
