@@ -683,6 +683,9 @@ private:
     //! Mark a block as not having block data
     void EraseBlockData(CBlockIndex* index) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+    //! Add an oracle to CBlock after added to CBlockIndex
+    void AddOracleToCBlock(const CChainParams& chainparams);
+
     friend ChainstateManager;
 };
 

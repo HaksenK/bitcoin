@@ -82,6 +82,9 @@ const std::vector<std::string> CHECKLEVEL_DOC {
     "each level includes the checks of the previous levels",
 };
 
+// added for oracle
+std::vector<CBlockIndex*> vIndexWithNewOracle;
+
 bool CBlockIndexWorkComparator::operator()(const CBlockIndex *pa, const CBlockIndex *pb) const {
     // First sort by most total work, ...
     if (pa->nChainWork > pb->nChainWork) return false;
@@ -3230,7 +3233,6 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
 
         // set oracle for all blocks with the same height
         for (auto itr = vpsameHeightIndices.begin(); itr != vpsameHeightIndices.end(); ++itr) {
-            (*itr)->oracle.SetNull();
             (*itr)->has_oracle = true;
             (*itr)->oracle = oracle;
             // reset phashBlockWithOracle
@@ -3240,6 +3242,7 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
                 BlockMap::iterator mi = m_block_index.insert(std::make_pair(hashBlockWithOracle, *itr)).first;
                 (*itr)->phashBlockWithOracle = &((*mi).first);
             }
+            vIndexWithNewOracle.emplace_back(*itr);
         }
         CheckStatusInvalidHashBlocks(vpsameHeightIndices);
 
@@ -3846,6 +3849,27 @@ static FlatFilePos SaveBlockToDisk(const CBlock& block, int nHeight, const CChai
     return blockPos;
 }
 
+void CChainState::AddOracleToCBlock(const CChainParams& chainparams) {
+    LOCK(cs_main);
+
+    for (CBlockIndex* pindex : vIndexWithNewOracle) {
+        CBlock block;
+        FlatFilePos blockPos = pindex->GetBlockPos();
+
+        if (ReadBlockFromDisk(block, blockPos, chainparams.GetConsensus())) {
+            // fix FlatFilePos of the block to overwrite
+            blockPos.nPos -= 8;
+            block.has_oracle = pindex->has_oracle;
+            block.oracle = pindex->oracle;
+            WriteBlockToDisk(block, blockPos, chainparams.MessageStart());
+            pindex->nFile = blockPos.nFile;
+            pindex->nDataPos = blockPos.nPos;
+        }
+    }
+
+    vIndexWithNewOracle.clear();
+}
+
 /** Store block on disk. If dbp is non-nullptr, the file is known to already reside on disk */
 bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, BlockValidationState& state, const CChainParams& chainparams, CBlockIndex** ppindex, bool fRequested, const FlatFilePos* dbp, bool* fNewBlock, bool is_selfish)
 {
@@ -3921,6 +3945,7 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, Block
     } catch (const std::runtime_error& e) {
         return AbortNode(state, std::string("System error: ") + e.what());
     }
+    AddOracleToCBlock(chainparams);
 
     FlushStateToDisk(chainparams, state, FlushStateMode::NONE);
 
@@ -4995,7 +5020,12 @@ void CChainState::CheckBlockIndex(const Consensus::Params& consensusParams, bool
                 // setBlockIndexCandidates.  m_chain.Tip() must also be there
                 // even if some data has been pruned.
                 if (pindexFirstMissing == nullptr || pindex == m_chain.Tip()) {
-                    assert(setBlockIndexCandidates.count(pindex));
+                    bool included = false;
+                    for (auto tmpindex : setBlockIndexCandidates) {
+                        included |= (tmpindex == pindex);
+                    }
+                    assert(included);
+                    //assert(setBlockIndexCandidates.count(pindex));
                 }
                 // If some parent is missing, then it could be that this block was in
                 // setBlockIndexCandidates but had to be removed because of the missing data.
