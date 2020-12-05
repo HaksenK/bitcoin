@@ -1582,10 +1582,18 @@ void static ProcessGetBlockData(CNode& pfrom, const CChainParams& chainparams, c
             pblock = pblockRead;
         }
         if (pblock) {
-            if (inv.type == MSG_BLOCK)
-                connman->PushMessage(&pfrom, msgMaker.Make(SERIALIZE_TRANSACTION_NO_WITNESS, NetMsgType::BLOCK, *pblock));
-            else if (inv.type == MSG_WITNESS_BLOCK)
+            if (inv.type == MSG_BLOCK) {
+                std::shared_ptr<CBlock> tmppblock = std::const_pointer_cast<CBlock>(pblock);
+                tmppblock->is_readwrite_mode = true;
+                connman->PushMessage(&pfrom, msgMaker.Make(SERIALIZE_TRANSACTION_NO_WITNESS, NetMsgType::BLOCK, *tmppblock));
+                tmppblock->is_readwrite_mode = false;
+            }
+            else if (inv.type == MSG_WITNESS_BLOCK) {
+                std::shared_ptr<CBlock> tmppblock = std::const_pointer_cast<CBlock>(pblock);
+                tmppblock->is_readwrite_mode = true;
                 connman->PushMessage(&pfrom, msgMaker.Make(NetMsgType::BLOCK, *pblock));
+                tmppblock->is_readwrite_mode = false;
+            }
             else if (inv.type == MSG_FILTERED_BLOCK)
             {
                 bool sendMerkleBlock = false;
@@ -1628,7 +1636,10 @@ void static ProcessGetBlockData(CNode& pfrom, const CChainParams& chainparams, c
                         connman->PushMessage(&pfrom, msgMaker.Make(nSendFlags, NetMsgType::CMPCTBLOCK, cmpctblock));
                     }
                 } else {
+                    std::shared_ptr<CBlock> tmppblock = std::const_pointer_cast<CBlock>(pblock);
+                    tmppblock->is_readwrite_mode = true;
                     connman->PushMessage(&pfrom, msgMaker.Make(nSendFlags, NetMsgType::BLOCK, *pblock));
+                    tmppblock->is_readwrite_mode = false;
                 }
             }
         }
@@ -3311,7 +3322,9 @@ void ProcessMessage(
         }
 
         std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
+        pblock->is_readwrite_mode = true;
         vRecv >> *pblock;
+        pblock->is_readwrite_mode = false;
 
         LogPrint(BCLog::NET, "received block %s peer=%d\n", pblock->GetHash().ToString(), pfrom.GetId());
 
@@ -4138,15 +4151,15 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
             for (auto hashToAnnounce : pto->vBlockHashesWithOracleToAnnounce) {
                 const CBlockIndex* tmpindex = LookupBlockIndex(hashToAnnounce);
                 CBlock tmpblock;
-                bool could_read = ReadBlockFromDisk(tmpblock, tmpindex, consensusParams);
-                if (could_read) {
+                if (ReadBlockFromDisk(tmpblock, tmpindex, consensusParams)) {
                     tmpvHeader.push_back(tmpblock.GetBlockHeader());
                     tmpvBlock.push_back(tmpblock);
                 }
             }
-            if (tmpvHeader.size() > 0)
+            if (state.fPreferHeaders && tmpvHeader.size() > 0)
                 connman->PushMessage(pto, msgMaker.Make(NetMsgType::HEADERS, tmpvHeader));
             for (auto blockToAnnounce : tmpvBlock) {
+                blockToAnnounce.is_readwrite_mode = true;
                 connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, blockToAnnounce));
             }
             pto->vBlockHashesWithOracleToAnnounce.clear();
