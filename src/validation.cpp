@@ -3832,7 +3832,11 @@ bool ChainstateManager::ProcessNewBlockHeaders(const std::vector<CBlockHeader>& 
 
 /** Store block on disk. If dbp is non-nullptr, the file is known to already reside on disk */
 static FlatFilePos SaveBlockToDisk(const CBlock& block, int nHeight, const CChainParams& chainparams, const FlatFilePos* dbp) {
-    unsigned int nBlockSize = ::GetSerializeSize(block, CLIENT_VERSION);
+    // Serialized size must be of a readwrite mode block
+    CBlock& rwBlock = const_cast<CBlock&>(block);
+    rwBlock.is_readwrite_mode = true;
+    unsigned int nBlockSize = ::GetSerializeSize(rwBlock, CLIENT_VERSION);
+    rwBlock.is_readwrite_mode = false;
     FlatFilePos blockPos;
     if (dbp != nullptr)
         blockPos = *dbp;
