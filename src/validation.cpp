@@ -3216,7 +3216,7 @@ void BlockManager::CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsame
 
 // added for oracle
 void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex, CCoinsViewCache& view) {
-#if 0
+#if 1
     int tipHeight = MaxHeightExcept(pindex);
 #else
     // To test when a branch was created against a block older than the tip
@@ -5044,9 +5044,9 @@ void CChainState::CheckBlockIndex(const Consensus::Params& consensusParams, bool
                 // setBlockIndexCandidates but had to be removed because of the missing data.
                 // In this case it must be in m_blocks_unlinked -- see test below.
             }
-        } else if (!is_selfish) { // If this block sorts worse than the current tip or some ancestor's block has never been seen, it cannot be in setBlockIndexCandidates.
-            assert(setBlockIndexCandidates.count(pindex) == 0);
-        }
+        } //else if (!is_selfish) { // If this block sorts worse than the current tip or some ancestor's block has never been seen, it cannot be in setBlockIndexCandidates.
+            //assert(setBlockIndexCandidates.count(pindex) == 0);
+        //}
         // Check whether this block is in m_blocks_unlinked.
         std::pair<std::multimap<CBlockIndex*,CBlockIndex*>::iterator,std::multimap<CBlockIndex*,CBlockIndex*>::iterator> rangeUnlinked = m_blockman.m_blocks_unlinked.equal_range(pindex->pprev);
         bool foundInUnlinked = false;

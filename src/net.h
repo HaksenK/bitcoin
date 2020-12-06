@@ -896,6 +896,7 @@ private:
     CService addrLocal GUARDED_BY(cs_addrLocal);
     mutable RecursiveMutex cs_addrLocal;
 public:
+    bool blockWithOraclePushed = false;
 
     NodeId GetId() const {
         return id;
@@ -993,13 +994,17 @@ public:
     void PushBlockHash(const uint256 &hash)
     {
         LOCK(cs_inventory);
-        vBlockHashesToAnnounce.push_back(hash);
+        if (blockWithOraclePushed)
+            blockWithOraclePushed = false;
+        else
+            vBlockHashesToAnnounce.push_back(hash);
     }
 
     void PushBlockHashWithOracle(const uint256 &hash)
     {
         LOCK(cs_inventory);
         vBlockHashesWithOracleToAnnounce.push_back(hash);
+        blockWithOraclePushed = true;
     }
 
     void CloseSocketDisconnect();

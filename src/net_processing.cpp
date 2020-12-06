@@ -261,6 +261,8 @@ struct CNodeState {
     const CBlockIndex *pindexLastCommonBlock;
     //! The best header we have sent our peer.
     const CBlockIndex *pindexBestHeaderSent;
+    //! The best header with an oracle we have sent our peer.
+    const CBlockIndex *pindexBestHeaderWithOracleSent;
     //! Length of current-streak of unconnecting headers announcements
     int nUnconnectingHeaders;
     //! Whether we've started headers synchronization with this peer.
@@ -406,6 +408,7 @@ struct CNodeState {
         hashLastUnknownBlock.SetNull();
         pindexLastCommonBlock = nullptr;
         pindexBestHeaderSent = nullptr;
+        pindexBestHeaderWithOracleSent = nullptr;
         nUnconnectingHeaders = 0;
         fSyncStarted = false;
         nHeadersSyncTimeout = 0;
@@ -628,6 +631,8 @@ static bool PeerHasHeader(CNodeState *state, const CBlockIndex *pindex) EXCLUSIV
     if (state->pindexBestKnownBlock && pindex == state->pindexBestKnownBlock->GetAncestor(pindex->nHeight))
         return true;
     if (state->pindexBestHeaderSent && pindex == state->pindexBestHeaderSent->GetAncestor(pindex->nHeight))
+        return true;
+    if (state->pindexBestHeaderWithOracleSent && pindex == state->pindexBestHeaderWithOracleSent->GetAncestor(pindex->nHeight))
         return true;
     return false;
 }
@@ -4003,6 +4008,43 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
         }
 
         //
+        // send block branches with oracle
+        //
+        {
+            LOCK(pto->cs_inventory);
+            std::vector<CBlock> tmpvHeader;
+            std::vector<CBlock> tmpvBlock;
+            for (auto hashToAnnounce : pto->vBlockHashesWithOracleToAnnounce) {
+                const CBlockIndex* tmpindex = LookupBlockIndex(hashToAnnounce);
+                CBlock tmpblock;
+                if (ReadBlockFromDisk(tmpblock, tmpindex, consensusParams)) {
+                    tmpvHeader.push_back(tmpblock.GetBlockHeader());
+                    tmpvBlock.push_back(tmpblock);
+                }
+                if (!(state.pindexBestHeaderWithOracleSent && state.pindexBestHeaderWithOracleSent->nHeight >= tmpindex->nHeight))
+                    state.pindexBestHeaderWithOracleSent = tmpindex;
+
+            }
+            if (!pto->vBlockHashesWithOracleToAnnounce.empty()) {
+                std::vector<uint256>::iterator itr = pto->vBlockHashesToAnnounce.begin();
+                while (itr != pto->vBlockHashesToAnnounce.end()) {
+                    CBlockIndex* tmpindex = LookupBlockIndex(*itr);
+                    if (tmpindex->GetAncestor(state.pindexBestHeaderWithOracleSent->nHeight) != state.pindexBestHeaderWithOracleSent)
+                        itr = pto->vBlockHashesToAnnounce.erase(itr);
+                    else
+                        ++itr;
+                }
+            }
+            if (state.fPreferHeaders && tmpvHeader.size() > 0)
+                connman->PushMessage(pto, msgMaker.Make(NetMsgType::HEADERS, tmpvHeader));
+            for (auto blockToAnnounce : tmpvBlock) {
+                blockToAnnounce.is_readwrite_mode = true;
+                connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, blockToAnnounce));
+            }
+            pto->vBlockHashesWithOracleToAnnounce.clear();
+        }
+
+        //
         // Try sending block announcements via headers
         //
         {
@@ -4139,30 +4181,6 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
                 }
             }
             pto->vBlockHashesToAnnounce.clear();
-        }
-
-        //
-        // send block branches with oracle
-        //
-        {
-            LOCK(pto->cs_inventory);
-            std::vector<CBlock> tmpvHeader;
-            std::vector<CBlock> tmpvBlock;
-            for (auto hashToAnnounce : pto->vBlockHashesWithOracleToAnnounce) {
-                const CBlockIndex* tmpindex = LookupBlockIndex(hashToAnnounce);
-                CBlock tmpblock;
-                if (ReadBlockFromDisk(tmpblock, tmpindex, consensusParams)) {
-                    tmpvHeader.push_back(tmpblock.GetBlockHeader());
-                    tmpvBlock.push_back(tmpblock);
-                }
-            }
-            if (state.fPreferHeaders && tmpvHeader.size() > 0)
-                connman->PushMessage(pto, msgMaker.Make(NetMsgType::HEADERS, tmpvHeader));
-            for (auto blockToAnnounce : tmpvBlock) {
-                blockToAnnounce.is_readwrite_mode = true;
-                connman->PushMessage(pto, msgMaker.Make(NetMsgType::BLOCK, blockToAnnounce));
-            }
-            pto->vBlockHashesWithOracleToAnnounce.clear();
         }
 
         //
