@@ -3294,7 +3294,7 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
     if (pindexBestHeader == nullptr || pindexBestHeader->nChainWork < pindexNew->nChainWork)
         pindexBestHeader = pindexNew;
     // added for oracle
-    if (::ChainstateActive().CanFlushToDisk())
+    if (::ChainstateActive().CanFlushToDisk() /* To check m_coins_views and m_coins_views->m_cacheview are not null */)
         AddOracleIfNeeded(pindexNew, ::ChainstateActive().CoinsTip());
 
     setDirtyBlockIndex.insert(pindexNew);
@@ -3873,9 +3873,10 @@ void CChainState::AddOracleToCBlock(const CChainParams& chainparams) {
             blockPos.nPos -= 8;
             block.has_oracle = pindex->has_oracle;
             block.oracle = pindex->oracle;
-            WriteBlockToDisk(block, blockPos, chainparams.MessageStart());
-            pindex->nFile = blockPos.nFile;
-            pindex->nDataPos = blockPos.nPos;
+            if (WriteBlockToDisk(block, blockPos, chainparams.MessageStart())) {
+                pindex->nFile = blockPos.nFile;
+                pindex->nDataPos = blockPos.nPos;
+            }
         }
     }
 
