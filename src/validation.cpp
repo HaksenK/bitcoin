@@ -82,8 +82,10 @@ const std::vector<std::string> CHECKLEVEL_DOC {
     "each level includes the checks of the previous levels",
 };
 
-// added for oracle
+/** Added for oracle */
 std::vector<CBlockIndex*> vIndexWithNewOracle;
+/** To save fork block when creating a branch. */
+CBlockIndex* new_branch_fork_pindex = nullptr;
 
 bool CBlockIndexWorkComparator::operator()(const CBlockIndex *pa, const CBlockIndex *pb) const {
     // First sort by most total work, ...
@@ -3213,7 +3215,7 @@ void BlockManager::CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsame
 }
 
 // added for oracle
-void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
+void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex, CCoinsViewCache& view) {
 #if 0
     int tipHeight = MaxHeightExcept(pindex);
 #else
@@ -3223,6 +3225,8 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
     // If no competitive branch, tipHeight must be smaller than pindex->nHeight to prevent from oracle
     if (toCountCompetitiveBranches.size() <= 1) tipHeight = -1;
 #endif
+    uint256 cacheTipHash = view.GetBestBlock();
+
     if (tipHeight == pindex->nHeight) {
         std::vector<CBlockIndex*> vpsameHeightIndices = LookupBlockIndicesFromHeight(tipHeight);
         uint256 oracle;
@@ -3243,11 +3247,14 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex) {
                 (*itr)->phashBlockWithOracle = &((*mi).first);
             }
             vIndexWithNewOracle.emplace_back(*itr);
+            if ((*itr)->GetBlockHash() == cacheTipHash)
+                view.SetBestBlock((*itr)->GetBlockHash(true));
         }
         CheckStatusInvalidHashBlocks(vpsameHeightIndices);
 
-        // broadcast to other nodes
-        const CBlockIndex* pindexFork = ChainActive().FindFork(pindex);
+        // prepare to broadcast to other nodes
+        const CBlockIndex* pindexFork = new_branch_fork_pindex ? new_branch_fork_pindex : ChainActive().FindFork(pindex);
+        new_branch_fork_pindex = nullptr;
         GetMainSignals().UpdatedBlockBranchWithOracle(pindex, pindexFork, false);
     } else {
         uint256 dummyHashWithOracle;
@@ -3287,7 +3294,8 @@ CBlockIndex* BlockManager::AddToBlockIndex(const CBlockHeader& block)
     if (pindexBestHeader == nullptr || pindexBestHeader->nChainWork < pindexNew->nChainWork)
         pindexBestHeader = pindexNew;
     // added for oracle
-    AddOracleIfNeeded(pindexNew);
+    if (::ChainstateActive().CanFlushToDisk())
+        AddOracleIfNeeded(pindexNew, ::ChainstateActive().CoinsTip());
 
     setDirtyBlockIndex.insert(pindexNew);
 

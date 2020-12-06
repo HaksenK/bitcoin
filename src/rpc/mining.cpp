@@ -551,6 +551,8 @@ static UniValue generatetoaddressnexttohash(const JSONRPCRequest& request)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
         }
     }
+    // to save block index forking from
+    new_branch_fork_pindex = pblockindex;
 
     return generateBlockNextToBlockIndex(chainman, mempool, coinbase_script, num_blocks, max_tries, pblockindex);
 }

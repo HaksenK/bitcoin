@@ -152,6 +152,8 @@ extern bool fPruneMode;
 extern uint64_t nPruneTarget;
 /** Documentation for argument 'checklevel'. */
 extern const std::vector<std::string> CHECKLEVEL_DOC;
+/** To save fork block when creating a branch. */
+extern CBlockIndex* new_branch_fork_pindex;
 
 /** Open a block file (blk?????.dat) */
 FILE* OpenBlockFile(const FlatFilePos &pos, bool fReadOnly = false);
@@ -399,7 +401,7 @@ public:
     int MaxHeightExcept(CBlockIndex* pindex);
     std::vector<CBlockIndex*> LookupBlockIndicesFromHeight(int height);
     void CheckStatusInvalidHashBlocks(std::vector<CBlockIndex*> vpsameHeightIndices);
-    void AddOracleIfNeeded(CBlockIndex* pindex);
+    void AddOracleIfNeeded(CBlockIndex* pindex, CCoinsViewCache& view);
 
     CBlockIndex* AddToBlockIndex(const CBlockHeader& block) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     /** Create a new block index entry for a given block hash */
