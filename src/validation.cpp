@@ -3254,7 +3254,6 @@ void BlockManager::AddOracleIfNeeded(CBlockIndex* pindex, CCoinsViewCache& view)
 
         // prepare to broadcast to other nodes
         const CBlockIndex* pindexFork = new_branch_fork_pindex ? new_branch_fork_pindex : ChainActive().FindFork(pindex);
-        new_branch_fork_pindex = nullptr;
         GetMainSignals().UpdatedBlockBranchWithOracle(pindex, pindexFork, false);
     } else {
         uint256 dummyHashWithOracle;

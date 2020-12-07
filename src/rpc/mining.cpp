@@ -384,6 +384,8 @@ static UniValue generateblock(const JSONRPCRequest& request)
 // imitation of generatetoaddress, but needs a previous block's index
 static UniValue generateBlockNextToBlockIndex(ChainstateManager& chainman, const CTxMemPool& mempool, const CScript& coinbase_script, int nGenerate, uint64_t nMaxTries, CBlockIndex* pblockindex)
 {
+    // to save block index forking from
+    new_branch_fork_pindex = pblockindex;
     int nHeightEnd = 0;
     int nHeight = 0;
     CBlockIndex* pblockroot = pblockindex;
@@ -501,6 +503,8 @@ static UniValue generateBlockNextToBlockIndex(ChainstateManager& chainman, const
             pblockindex = pblocknowgenerated;
         }
     }
+    // to save block index forking from
+    new_branch_fork_pindex = nullptr;
 
     // no need to reprocess preserved blocks
     return blockHashes;
@@ -551,8 +555,6 @@ static UniValue generatetoaddressnexttohash(const JSONRPCRequest& request)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
         }
     }
-    // to save block index forking from
-    new_branch_fork_pindex = pblockindex;
 
     return generateBlockNextToBlockIndex(chainman, mempool, coinbase_script, num_blocks, max_tries, pblockindex);
 }

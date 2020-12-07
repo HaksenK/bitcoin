@@ -130,6 +130,8 @@ static constexpr unsigned int MAX_FEEFILTER_CHANGE_DELAY = 5 * 60;
 static constexpr uint32_t MAX_GETCFILTERS_SIZE = 1000;
 /** Maximum number of cf hashes that may be requested with one getcfheaders. See BIP 157. */
 static constexpr uint32_t MAX_GETCFHEADERS_SIZE = 2000;
+// to save block index forking from
+extern CBlockIndex* new_branch_fork_pindex;
 
 struct COrphanTx {
     // When modifying, adapt the copy of this definition in tests/DoS_tests.
@@ -4047,7 +4049,7 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
         //
         // Try sending block announcements via headers
         //
-        {
+        if (!new_branch_fork_pindex) {
             // If we have less than MAX_BLOCKS_TO_ANNOUNCE in our
             // list of block hashes we're relaying, and our peer wants
             // headers announcements, then find the first header
